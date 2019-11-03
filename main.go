@@ -1,7 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -16,5 +20,18 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(sess)
+	// fmt.Println(sess)
+	svc := dynamodb.New(sess)
+	result := GetItem(svc)
+	// // 출력파일 생성
+	// fo, err := os.Create("./data.json")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// defer fo.Close()
+	// _, err = fo.Write(result)
+	file, _ := json.MarshalIndent(result, "", " ")
+
+	_ = ioutil.WriteFile("recommend.json", file, 0644)
+
 }

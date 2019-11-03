@@ -4,33 +4,64 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
-type RecommendHistoryItem struct {
-	category  string `json:"category"`
-	createdAt string `json:"createdAt"`
-	ID        string `json:"ID"`
+type InputType struct {
+	Category            string   `json:"category"`
+	NotPreferProductIDs []string `json:"notPreferProductIDs"`
+	PreferProductIDs    []string `json:"preferProductIDs"`
+	TagIDs              []string `json:"tagIDs"`
+	UserID              string   `json:"userID"`
 }
 
-func GetItem(svc *dynamodb.DynamoDB) {
-	result, err := svc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String("RecommendHistory"),
-		Key: map[string]*dynamodb.AttributeValue{
-			"ID": {
-				S: aws.String("01ba5e60-c1d8-4b21-b2dd-9039f806087e")},
-		}})
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-	item := RecommendHistoryItem{}
+type RecommendHistoryItem struct {
+	Category  string    `json:"category"`
+	CreatedAt string    `json:"createdAt"`
+	ID        string    `json:"ID"`
+	Input     InputType `json:"input"`
+}
 
-	err = dynamodbattribute.UnmarshalMap(result.Item, &item)
+func GetItem(svc *dynamodb.DynamoDB) []RecommendHistoryItem {
+	Items := make([]RecommendHistoryItem, 0, 100)
+	var lek map[string]*dynamodb.AttributeValue
+	for {
 
-	if err != nil {
-		panic(fmt.Sprintf("Failed", err))
+		filt := expression.Name("category").Equal(expression.Value("CONCEALER"))
+
+		expr, err := expression.NewBuilder().
+			WithFilter(filt).
+			Build()
+
+		result, err := svc.Scan(&dynamodb.ScanInput{
+			TableName:                 aws.String("RecommendHistory"),
+			ExpressionAttributeNames:  expr.Names(),
+			ExpressionAttributeValues: expr.Values(),
+			ExclusiveStartKey:         lek,
+			FilterExpression:          expr.Filter(),
+		})
+
+		if result.LastEvaluatedKey == nil {
+			break
+		}
+
+		lek = result.LastEvaluatedKey
+
+		fmt.Println(lek)
+
+		if err != nil {
+			panic(fmt.Sprintf("Failed", err))
+		}
+		target := []RecommendHistoryItem{}
+
+		err = dynamodbattribute.UnmarshalListOfMaps(result.Items, &target)
+		if err != nil {
+			panic(fmt.Sprintf("Failed", err))
+		}
+		Items = append(Items, target...)
 	}
+	return Items
 }
